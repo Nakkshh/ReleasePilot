@@ -1,0 +1,20 @@
+name: CI Demo
+on:
+  workflow_dispatch:
+    inputs:
+      fail:
+        description: "Force a failure"
+        type: boolean
+        default: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Simulate build
+        run: echo "Building..."
+      - name: Simulate tests
+        if: ${{ inputs.fail }}
+        run: |
+          echo "ERROR: 2 tests failed in PaymentServiceTest"
+          exit 1
