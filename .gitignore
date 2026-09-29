@@ -1,0 +1,122 @@
+# =========================================================
+# IDE / Editor
+# =========================================================
+
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# =========================================================
+# Java / Maven / Spring Boot
+# =========================================================
+
+# Maven build output
+target/
+*/target/
+
+# Compiled Java files
+*.class
+
+# Maven generated files
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Spring Boot logs
+*.log
+logs/
+
+# =========================================================
+# Node / React / Vite
+# =========================================================
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Vite build output
+dist/
+*/dist/
+
+# Other frontend build output
+build/
+*/build/
+
+# Vite cache
+.vite/
+*/.vite/
+
+# =========================================================
+# Environment Variables / Secrets
+# =========================================================
+
+.env
+.env.*
+!.env.example
+
+# Local Spring configuration
+application-local.properties
+application-local.yml
+application-local.yaml
+
+# Any files explicitly containing local secrets
+*.local.properties
+*.local.yml
+*.local.yaml
+
+# =========================================================
+# OS generated files
+# =========================================================
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# =========================================================
+# Temporary files
+# =========================================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+
+# =========================================================
+# Coverage / Test output
+# =========================================================
+
+coverage/
+*/coverage/
+
+# =========================================================
+# Generated files
+# =========================================================
+
+generated/
+*/generated/
+
+# =========================================================
+# Database / local development files
+# =========================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================================================
+# Runtime files
+# =========================================================
+
+*.pid
+*.pid.lock
