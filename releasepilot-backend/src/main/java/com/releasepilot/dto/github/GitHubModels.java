@@ -32,7 +32,19 @@ public final class GitHubModels {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Pull(Integer number, String title, Boolean draft, User user) {
+    public record Pull(Integer number, String title, Boolean draft, User user, Head head) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Head(String sha) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Review(
+            User user,
+            String state,
+            @JsonProperty("submitted_at") String submittedAt,
+            @JsonProperty("commit_id") String commitId) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

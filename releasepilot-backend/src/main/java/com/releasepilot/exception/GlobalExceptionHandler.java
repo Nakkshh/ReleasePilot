@@ -51,4 +51,11 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
+
+    @ExceptionHandler(AgentBudgetExceededException.class)
+    public ResponseEntity<ErrorResponse> handleAgentBudget(AgentBudgetExceededException ex) {
+        log.warn("Agent guardrail tripped: {}", ex.getMessage());
+        ErrorResponse body = new ErrorResponse("AGENT_BUDGET_EXCEEDED", ex.getMessage(), Instant.now());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
 }

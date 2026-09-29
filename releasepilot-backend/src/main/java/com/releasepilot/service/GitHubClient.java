@@ -60,6 +60,14 @@ public class GitHubClient {
                 .body(new ParameterizedTypeReference<List<GitHubModels.Issue>>() {});
     }
 
+    public List<GitHubModels.Review> getReviews(int pullNumber) {
+        return rest.get()
+                .uri("/repos/{o}/{r}/pulls/{n}/reviews?per_page=100", owner, repo, pullNumber)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::fail)
+                .body(new ParameterizedTypeReference<List<GitHubModels.Review>>() {});
+    }
+
     private void fail(org.springframework.http.HttpRequest request, ClientHttpResponse response)
             throws IOException {
         int status = response.getStatusCode().value();

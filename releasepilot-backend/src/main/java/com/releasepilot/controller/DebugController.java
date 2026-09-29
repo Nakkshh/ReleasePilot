@@ -35,4 +35,9 @@ public class DebugController {
     public String issues() {
         return tools.getIssues();
     }
+
+    @GetMapping("/prs/reviews")
+    public String prReviews(@RequestParam(required = false) Integer number) {
+        return tools.getPullRequestReviews(number);
+    }
 }
