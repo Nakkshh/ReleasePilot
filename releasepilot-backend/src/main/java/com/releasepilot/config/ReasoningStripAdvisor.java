@@ -10,7 +10,6 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -24,7 +23,6 @@ import java.util.Map;
  * Only active with the "groq" profile.
  */
 @Component
-@Profile("groq")
 public class ReasoningStripAdvisor implements CallAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(ReasoningStripAdvisor.class);

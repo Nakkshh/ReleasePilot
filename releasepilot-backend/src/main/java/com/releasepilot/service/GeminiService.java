@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -38,7 +38,7 @@ public class GeminiService {
             if (temperature != null) {
                 // .options() takes a ChatOptions.Builder in Spring AI 2.0 — do NOT call .build() here.
                 requestSpec = requestSpec.options(
-                        GoogleGenAiChatOptions.builder().temperature(temperature)
+                        ChatOptions.builder().temperature(temperature)
                 );
             }
 
@@ -57,7 +57,7 @@ public class GeminiService {
         try {
             return chatClient.prompt()
                     .user(u -> u.text(ANALYZE_TEMPLATE).params(Map.of("text", text)))
-                    .options(GoogleGenAiChatOptions.builder().temperature(0.1)) // low temp: consistent classification, not creativity
+                    .options(ChatOptions.builder().temperature(0.1)) // low temp: consistent classification, not creativity
                     .call()
                     .entity(ChangeAnalysis.class);
         } catch (Exception e) {
