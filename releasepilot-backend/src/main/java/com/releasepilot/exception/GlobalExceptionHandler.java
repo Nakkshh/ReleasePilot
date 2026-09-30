@@ -58,4 +58,11 @@ public class GlobalExceptionHandler {
         ErrorResponse body = new ErrorResponse("AGENT_BUDGET_EXCEEDED", ex.getMessage(), Instant.now());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
     }
+
+    @ExceptionHandler(GitHubApiException.class)
+    public ResponseEntity<ErrorResponse> handleGitHub(GitHubApiException ex) {
+        log.warn("GitHub API failure: {}", ex.getMessage());
+        ErrorResponse body = new ErrorResponse("GITHUB_API_ERROR", ex.getMessage(), Instant.now());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+    }
 }
