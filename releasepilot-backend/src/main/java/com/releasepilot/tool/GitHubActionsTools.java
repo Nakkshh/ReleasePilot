@@ -6,7 +6,6 @@ import com.releasepilot.service.GitHubActionsClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -30,8 +29,10 @@ public class GitHubActionsTools {
         this.github = github;
     }
 
+    // ---------------- Model-facing tools: NO parameters, so the model can never send null ----------------
+
     @Tool(description = "Get the single most recent GitHub Actions workflow run (CI/CD build) "
-            + "with its status, conclusion, branch and commit.")
+            + "with its status, conclusion, branch and commit. Takes no arguments.")
     public String getLatestWorkflow() {
         log.info("[TOOL CALLED] getLatestWorkflow()");
         try {
@@ -45,11 +46,27 @@ public class GitHubActionsTools {
         }
     }
 
-    @Tool(description = "Get the status of recent GitHub Actions workflow runs (CI/CD builds), newest first. "
-            + "Useful to see whether builds are passing or failing over time.")
-    public String getWorkflowStatus(
-            @ToolParam(description = "How many recent runs to return. Defaults to 5 if not specified.")
-            Integer count) {
+    @Tool(description = "Get the status of the 5 most recent GitHub Actions workflow runs (CI/CD builds), "
+            + "newest first. Useful to see whether builds are passing or failing over time. Takes no arguments.")
+    public String getWorkflowStatus() {
+        return workflowStatus(5);
+    }
+
+    @Tool(description = "List the failed jobs (and their failed steps) of the most recent failed "
+            + "GitHub Actions workflow run. Takes no arguments.")
+    public String getFailedJobs() {
+        return failedJobs(null);
+    }
+
+    @Tool(description = "Get the tail of the log output of the first failed job of the most recent "
+            + "failed GitHub Actions run, to explain why a build failed. Takes no arguments.")
+    public String getFailureLogs() {
+        return failureLogs(null);
+    }
+
+    // ---------------- NOT tools (no @Tool): used by debug controllers and the fallback path ----------------
+
+    public String workflowStatus(Integer count) {
         int n = (count == null || count <= 0) ? 5 : Math.min(count, 20);
         log.info("[TOOL CALLED] getWorkflowStatus(count={})", n);
         try {
@@ -63,12 +80,7 @@ public class GitHubActionsTools {
         }
     }
 
-    @Tool(description = "List the failed jobs (and their failed steps) of a workflow run. "
-            + "If no run id is given, uses the most recent failed run.")
-    public String getFailedJobs(
-            @ToolParam(description = "Workflow run id. Optional; omit to use the latest failed run.",
-                    required = false)
-            Long runId) {
+    public String failedJobs(Long runId) {
         log.info("[TOOL CALLED] getFailedJobs(runId={})", runId);
         try {
             Long id = runId;
@@ -95,12 +107,7 @@ public class GitHubActionsTools {
         }
     }
 
-    @Tool(description = "Get the tail of the log output of a failed CI job, to explain why a build failed. "
-            + "If no job id is given, uses the first failed job of the most recent failed run.")
-    public String getFailureLogs(
-            @ToolParam(description = "Job id. Optional; omit to use the latest failed job.",
-                    required = false)
-            Long jobId) {
+    public String failureLogs(Long jobId) {
         log.info("[TOOL CALLED] getFailureLogs(jobId={})", jobId);
         try {
             Long id = jobId;

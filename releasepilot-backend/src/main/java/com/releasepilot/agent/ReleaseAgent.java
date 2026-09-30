@@ -50,7 +50,7 @@ public class ReleaseAgent {
             1. Call getLatestWorkflow to get the latest CI result. If it failed, also call getFailedJobs.
             2. Call getPullRequests to see open pull requests.
             3. Call getIssues to see open issues.
-            4. Call getPullRequestReviews with no arguments to get the review status of open pull requests.
+            4. Call getPullRequestReviews to get the review status of open pull requests. It takes no arguments.
             """ + "\n" + RULES;
 
     private static final String FALLBACK_INTRO = """
@@ -199,11 +199,11 @@ public class ReleaseAgent {
         String latest = collect("getLatestWorkflow", () -> gitHubActionsTools.getLatestWorkflow(), trace, sb);
         // The format() helper in GitHubActionsTools prints "status/conclusion", e.g. "completed/failure".
         if (latest.contains("/failure")) {
-            collect("getFailedJobs", () -> gitHubActionsTools.getFailedJobs(null), trace, sb);
+            collect("getFailedJobs", () -> gitHubActionsTools.getFailedJobs(), trace, sb);
         }
         collect("getPullRequests", () -> gitHubTools.getPullRequests(), trace, sb);
         collect("getIssues", () -> gitHubTools.getIssues(), trace, sb);
-        collect("getPullRequestReviews", () -> gitHubTools.getPullRequestReviews(null), trace, sb);
+        collect("getPullRequestReviews", () -> gitHubTools.getPullRequestReviews(), trace, sb);
 
         String text = sb.toString();
         if (text.length() > MAX_EVIDENCE_CHARS) {

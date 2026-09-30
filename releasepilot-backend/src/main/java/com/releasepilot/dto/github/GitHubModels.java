@@ -62,4 +62,29 @@ public final class GitHubModels {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Label(String name) {
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PullLabel(String name) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ClosedPull(
+            Integer number,
+            String title,
+            User user,
+            List<PullLabel> labels,
+            @JsonProperty("merged_at") String mergedAt,
+            @JsonProperty("closed_at") String closedAt,
+            @JsonProperty("html_url") String htmlUrl) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Release(
+            @JsonProperty("tag_name") String tagName,
+            String name,
+            Boolean draft,
+            Boolean prerelease,
+            @JsonProperty("published_at") String publishedAt,
+            @JsonProperty("html_url") String htmlUrl) {
+    }
 }

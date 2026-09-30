@@ -6,25 +6,26 @@ import com.releasepilot.service.GitHubClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class GitHubTools {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubTools.class);
+    private static final int MAX_REVIEWED_PRS = 10;
 
     private final GitHubClient github;
-    private static final int MAX_REVIEWED_PRS = 10;
 
     public GitHubTools(GitHubClient github) {
         this.github = github;
     }
+
+    // ---------------- Model-facing tools: NO parameters ----------------
 
     @Tool(description = "Get basic information about the configured GitHub repository: "
             + "its name, description, star count and default branch.")
@@ -42,26 +43,10 @@ public class GitHubTools {
         }
     }
 
-    @Tool(description = "Get the most recent commits on the repository's default branch, "
-            + "newest first.")
-    public String getRecentCommits(
-            @ToolParam(description = "How many recent commits to return. Defaults to 5 if not specified.")
-            Integer count) {
-
-        int n = (count == null || count <= 0) ? 5 : Math.min(count, 30);
-        log.info("[TOOL CALLED] getRecentCommits(count={})", n);
-        try {
-            List<GitHubModels.Commit> commits = github.getRecentCommits(n);
-            if (commits.isEmpty()) {
-                return "No commits found.";
-            }
-            return commits.stream()
-                    .map(c -> c.sha().substring(0, 7) + " " + firstLine(c.commit().message())
-                            + " (" + c.commit().author().name() + ", " + c.commit().author().date() + ")")
-                    .collect(Collectors.joining("\n"));
-        } catch (GitHubApiException e) {
-            return "ERROR: " + e.getMessage();
-        }
+    @Tool(description = "Get the 5 most recent commits on the repository's default branch, "
+            + "newest first. Takes no arguments.")
+    public String getRecentCommits() {
+        return recentCommits(5);
     }
 
     @Tool(description = "Get the list of currently open pull requests on the repository "
@@ -107,13 +92,33 @@ public class GitHubTools {
         }
     }
 
-    @Tool(description = "Get the review status of pull requests: for each reviewer whether they approved, "
-            + "requested changes or were dismissed, plus an overall status per pull request. "
-            + "If no pull request number is given, covers all open pull requests.")
-    public String getPullRequestReviews(
-            @ToolParam(description = "Pull request number. Optional; omit to check all open pull requests.",
-                    required = false)
-            Integer pullNumber) {
+    @Tool(description = "Get the review status of all open pull requests: for each reviewer whether they "
+            + "approved, requested changes or were dismissed, plus an overall status per pull request. "
+            + "Takes no arguments.")
+    public String getPullRequestReviews() {
+        return pullRequestReviews(null);
+    }
+
+    // ---------------- NOT tools (no @Tool): used by debug controllers and the fallback path ----------------
+
+    public String recentCommits(Integer count) {
+        int n = (count == null || count <= 0) ? 5 : Math.min(count, 30);
+        log.info("[TOOL CALLED] getRecentCommits(count={})", n);
+        try {
+            List<GitHubModels.Commit> commits = github.getRecentCommits(n);
+            if (commits.isEmpty()) {
+                return "No commits found.";
+            }
+            return commits.stream()
+                    .map(c -> c.sha().substring(0, 7) + " " + firstLine(c.commit().message())
+                            + " (" + c.commit().author().name() + ", " + c.commit().author().date() + ")")
+                    .collect(Collectors.joining("\n"));
+        } catch (GitHubApiException e) {
+            return "ERROR: " + e.getMessage();
+        }
+    }
+
+    public String pullRequestReviews(Integer pullNumber) {
         log.info("[TOOL CALLED] getPullRequestReviews(pullNumber={})", pullNumber);
         try {
             if (pullNumber != null) {
@@ -179,5 +184,13 @@ public class GitHubTools {
         }
         int nl = message.indexOf('\n');
         return nl < 0 ? message : message.substring(0, nl);
+    }
+
+    public GitHubModels.Release getLatestRelease() {
+        return github.getLatestRelease();
+    }
+
+    public List<GitHubModels.ClosedPull> getClosedPullRequests(int perPage) {
+        return github.getClosedPullRequests(perPage);
     }
 }

@@ -87,4 +87,28 @@ public class GitHubClient {
             default -> throw new GitHubApiException("GitHub API error, HTTP " + status + ".");
         }
     }
+
+    public List<GitHubModels.ClosedPull> getClosedPullRequests(int perPage) {
+        return rest.get()
+                .uri("/repos/{o}/{r}/pulls?state=closed&sort=updated&direction=desc&per_page={n}",
+                        owner, repo, perPage)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, this::fail)
+                .body(new ParameterizedTypeReference<List<GitHubModels.ClosedPull>>() {});
+    }
+
+    /** Returns null when the repo has no published release (GitHub answers 404). */
+    public GitHubModels.Release getLatestRelease() {
+        return rest.get()
+                .uri("/repos/{o}/{r}/releases/latest", owner, repo)
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().value() == 404) {
+                        return null;
+                    }
+                    if (response.getStatusCode().isError()) {
+                        fail(request, response);   // throws GitHubApiException, as elsewhere
+                    }
+                    return response.bodyTo(GitHubModels.Release.class);
+                });
+    }
 }

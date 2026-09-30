@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.releasepilot.dto.github.GitHubModels;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/debug")
@@ -23,7 +25,7 @@ public class DebugController {
 
     @GetMapping("/commits")
     public String commits(@RequestParam(required = false) Integer count) {
-        return tools.getRecentCommits(count);
+        return tools.recentCommits(count);
     }
 
     @GetMapping("/prs")
@@ -38,6 +40,17 @@ public class DebugController {
 
     @GetMapping("/prs/reviews")
     public String prReviews(@RequestParam(required = false) Integer number) {
-        return tools.getPullRequestReviews(number);
+        return tools.pullRequestReviews(number);
+    }
+
+    @GetMapping("/releases/latest")
+    public Object latestRelease() {
+        GitHubModels.Release r = tools.getLatestRelease();
+        return r == null ? "No releases yet." : r;
+    }
+
+    @GetMapping("/prs/merged")
+    public List<GitHubModels.ClosedPull> closedPrs(@RequestParam(defaultValue = "20") int count) {
+        return tools.getClosedPullRequests(Math.min(count, 100));
     }
 }

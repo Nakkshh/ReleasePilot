@@ -23,16 +23,16 @@ public class DebugActionsController {
 
     @GetMapping("/status")
     public String status(@RequestParam(required = false) Integer count) {
-        return tools.getWorkflowStatus(count);
+        return tools.workflowStatus(count);
     }
 
     @GetMapping("/failed-jobs")
     public String failedJobs(@RequestParam(required = false) Long runId) {
-        return tools.getFailedJobs(runId);
+        return tools.failedJobs(runId);
     }
 
     @GetMapping("/logs")
     public String logs(@RequestParam(required = false) Long jobId) {
-        return tools.getFailureLogs(jobId);
+        return tools.failureLogs(jobId);
     }
 }
