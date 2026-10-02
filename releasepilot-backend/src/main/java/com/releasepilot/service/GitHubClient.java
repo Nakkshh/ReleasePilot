@@ -13,6 +13,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 
+import org.springframework.http.MediaType;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @Service
 public class GitHubClient {
 
@@ -110,5 +114,83 @@ public class GitHubClient {
                     }
                     return response.bodyTo(GitHubModels.Release.class);
                 });
+    }
+
+    /** True if the git tag exists. Uses the exact-match ref endpoint; 404 means no such tag. */
+    public boolean tagExists(String tag) {
+        Boolean exists = rest.get()
+                .uri("/repos/{o}/{r}/git/ref/tags/{t}", owner, repo, tag)
+                .exchange((request, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (status == 404) {
+                        return false;
+                    }
+                    if (response.getStatusCode().isError()) {
+                        fail(request, response);   // throws GitHubApiException
+                    }
+                    return true;
+                });
+        return Boolean.TRUE.equals(exists);
+    }
+
+    /** Null when no release exists for the tag (published releases only; GitHub hides drafts here). */
+    public GitHubModels.Release getReleaseByTag(String tag) {
+        return rest.get()
+                .uri("/repos/{o}/{r}/releases/tags/{t}", owner, repo, tag)
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().value() == 404) {
+                        return null;
+                    }
+                    if (response.getStatusCode().isError()) {
+                        fail(request, response);
+                    }
+                    return response.bodyTo(GitHubModels.Release.class);
+                });
+    }
+
+    /** Creates and publishes a release (draft=false). The tag is created from targetSha if it doesn't exist. */
+    public GitHubModels.Release createRelease(String tag, String targetSha, String name,
+                                              String body, boolean prerelease) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tag_name", tag);
+        if (targetSha != null) {
+            payload.put("target_commitish", targetSha);
+        }
+        payload.put("name", name);
+        payload.put("body", body);
+        payload.put("draft", false);
+        payload.put("prerelease", prerelease);
+        payload.put("generate_release_notes", false);
+
+        return rest.post()
+                .uri("/repos/{o}/{r}/releases", owner, repo)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(payload)
+                .exchange((request, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (status == 200 || status == 201) {
+                        return response.bodyTo(GitHubModels.Release.class);
+                    }
+                    if (status == 422) {
+                        throw new GitHubApiException("GitHub rejected the release (422): "
+                                + snippet(response.bodyTo(String.class)));
+                    }
+                    if (status == 404) {
+                        throw new GitHubApiException("GitHub returned 404 while creating the release. "
+                                + "Check that the token has Contents: write on this repository. GitHub also answers 404 "
+                                + "if the pinned commit changes files under .github/workflows relative to the default "
+                                + "branch and the token lacks Workflows: write.");
+                    }
+                    fail(request, response);   // always throws (401, 403, rate limit, other)
+                    return null;
+                });
+    }
+
+    private static String snippet(String s) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replaceAll("\\s+", " ").strip();
+        return t.length() <= 300 ? t : t.substring(0, 300) + "...";
     }
 }

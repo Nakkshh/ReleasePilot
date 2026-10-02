@@ -85,6 +85,7 @@ public final class GitHubModels {
             Boolean draft,
             Boolean prerelease,
             @JsonProperty("published_at") String publishedAt,
-            @JsonProperty("html_url") String htmlUrl) {
+            @JsonProperty("html_url") String htmlUrl,
+            Long id) {
     }
 }
