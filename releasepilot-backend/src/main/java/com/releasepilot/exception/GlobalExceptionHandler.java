@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -110,5 +111,18 @@ public class GlobalExceptionHandler {
         log.warn("Admin guard rejected a request: {}", ex.getCode());
         ErrorResponse body = new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now());
         return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
+        ErrorResponse body = new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException ex) {
+        ErrorResponse body = new ErrorResponse("BAD_REQUEST",
+                "Missing required parameter '" + ex.getParameterName() + "'.", Instant.now());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 }

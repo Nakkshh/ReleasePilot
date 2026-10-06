@@ -15,6 +15,6 @@ public class AdminGuardConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(adminTokenInterceptor).addPathPatterns("/api/release/**");
+        registry.addInterceptor(adminTokenInterceptor).addPathPatterns("/api/release/**", "/api/knowledge/**");
     }
 }
