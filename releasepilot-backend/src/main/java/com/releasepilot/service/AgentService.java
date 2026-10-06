@@ -2,6 +2,7 @@ package com.releasepilot.service;
 
 import com.releasepilot.config.ReasoningStripAdvisor;
 import com.releasepilot.exception.GeminiServiceException;
+import com.releasepilot.knowledge.KnowledgeTools;
 import com.releasepilot.tool.GitHubActionsTools;
 import com.releasepilot.tool.GitHubTools;
 import org.slf4j.Logger;
@@ -19,15 +20,18 @@ public class AgentService {
     private final ChatClient chatClient;
     private final GitHubTools gitHubTools;
     private final GitHubActionsTools gitHubActionsTools;
+    private final KnowledgeTools knowledgeTools;
     private final ObjectProvider<ReasoningStripAdvisor> reasoningStripAdvisor;
 
     public AgentService(ChatClient chatClient,
                         GitHubTools gitHubTools,
                         GitHubActionsTools gitHubActionsTools,
+                        KnowledgeTools knowledgeTools,
                         ObjectProvider<ReasoningStripAdvisor> reasoningStripAdvisor) {
         this.chatClient = chatClient;
         this.gitHubTools = gitHubTools;
         this.gitHubActionsTools = gitHubActionsTools;
+        this.knowledgeTools = knowledgeTools;
         this.reasoningStripAdvisor = reasoningStripAdvisor;
     }
 
@@ -53,7 +57,7 @@ public class AgentService {
     private String askOnce(String message) {
         var spec = chatClient.prompt()
                 .user(message)
-                .tools(gitHubTools, gitHubActionsTools);
+                .tools(gitHubTools, gitHubActionsTools, knowledgeTools);
 
         ReasoningStripAdvisor strip = reasoningStripAdvisor.getIfAvailable();
         if (strip != null) {
