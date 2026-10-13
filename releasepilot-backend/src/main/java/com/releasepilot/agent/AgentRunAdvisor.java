@@ -12,6 +12,8 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +46,7 @@ public class AgentRunAdvisor implements CallAdvisor {
 
     private long lastIterationEndNanos;
     private int modelCalls;
+    private List<Message> lastMessages = List.of();
     private int promptTokens;
     private int completionTokens;
 
@@ -67,6 +70,11 @@ public class AgentRunAdvisor implements CallAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
         long callStart = System.nanoTime();
+
+        List<Message> messages = request.prompt().getInstructions();
+        if (messages != null) {
+            lastMessages = messages;
+        }
 
         // Time since the previous model response = tool execution of that round.
         if (!rounds.isEmpty()) {
@@ -123,6 +131,23 @@ public class AgentRunAdvisor implements CallAdvisor {
         if (usage.getCompletionTokens() != null) {
             completionTokens += usage.getCompletionTokens();
         }
+    }
+
+    /** One tool result as the model received it (name + raw text). */
+    public record ToolOutput(String name, String text) {
+    }
+
+    /** Tool results seen in the most recent model request; call this BEFORE any follow-up model call. */
+    public List<ToolOutput> toolOutputs() {
+        List<ToolOutput> out = new ArrayList<>();
+        for (Message m : lastMessages) {
+            if (m instanceof ToolResponseMessage trm) {
+                for (ToolResponseMessage.ToolResponse r : trm.getResponses()) {
+                    out.add(new ToolOutput(r.name(), r.responseData()));
+                }
+            }
+        }
+        return out;
     }
 
     public List<TraceStep> trace() {

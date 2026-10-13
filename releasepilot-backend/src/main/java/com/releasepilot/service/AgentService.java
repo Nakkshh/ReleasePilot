@@ -5,6 +5,7 @@ import com.releasepilot.exception.GeminiServiceException;
 import com.releasepilot.knowledge.KnowledgeTools;
 import com.releasepilot.tool.GitHubActionsTools;
 import com.releasepilot.tool.GitHubTools;
+import com.releasepilot.agent.ProviderGlitch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -68,17 +69,6 @@ public class AgentService {
 
     /** Same patterns as ReleaseAgent; to be consolidated into one shared helper in Phase 10. */
     private static boolean isProviderToolGlitch(Throwable t) {
-        while (t != null) {
-            String m = t.getMessage();
-            if (m != null && (m.contains("<|channel|>")
-                    || m.contains("Tool call validation failed")
-                    || m.contains("Parsing failed")
-                    || m.contains("No content to map due to end-of-input")
-                    || m.contains("No ToolCallback found for tool name"))) {
-                return true;
-            }
-            t = t.getCause();
-        }
-        return false;
+        return ProviderGlitch.matches(t);
     }
 }

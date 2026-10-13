@@ -184,17 +184,7 @@ public class ReleaseNotesAgent {
 
     /** Same patterns as ReleaseAgent / AgentService; consolidate into one helper in Phase 10. */
     private static boolean isProviderGlitch(Throwable t) {
-        while (t != null) {
-            String m = t.getMessage();
-            if (m != null && (m.contains("<|channel|>")
-                    || m.contains("Tool call validation failed")
-                    || m.contains("Parsing failed")
-                    || m.contains("No content to map due to end-of-input"))) {
-                return true;
-            }
-            t = t.getCause();
-        }
-        return false;
+        return ProviderGlitch.matches(t);
     }
 
     private static long msSince(long startNanos) {
