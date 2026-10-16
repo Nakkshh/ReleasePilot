@@ -39,8 +39,8 @@ public class ReleaseDraftController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public DraftView create(@Valid @RequestBody CreateDraftRequest request) {
-        return service.create(request.tag(), Boolean.TRUE.equals(request.prerelease()));
+    public DraftView create(@Valid @RequestBody CreateDraftRequest request, @AuthenticationPrincipal Jwt jwt) {
+        return service.create(request.tag(), Boolean.TRUE.equals(request.prerelease()), jwt.getSubject());
     }
 
     @GetMapping

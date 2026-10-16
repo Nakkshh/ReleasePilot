@@ -35,6 +35,9 @@ public class AppUser {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "password_changed_at", nullable = false)
+    private Instant passwordChangedAt;
+
     protected AppUser() {
         // for JPA
     }
@@ -45,6 +48,21 @@ public class AppUser {
         this.role = role;
         this.enabled = enabled;
         this.createdAt = createdAt;
+        this.passwordChangedAt = createdAt;
+    }
+
+    /** Also stamps the change time: tokens issued before it stop working (see AccountGuard). */
+    public void changePassword(String newHash, Instant now) {
+        this.passwordHash = newHash;
+        this.passwordChangedAt = now;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public void setRole(Role role) {
+        this.role = role;
     }
 
     public Long getId() {
@@ -69,5 +87,9 @@ public class AppUser {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getPasswordChangedAt() {
+        return passwordChangedAt;
     }
 }

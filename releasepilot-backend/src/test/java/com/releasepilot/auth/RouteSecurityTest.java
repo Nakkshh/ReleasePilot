@@ -165,4 +165,13 @@ class RouteSecurityTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/does-not-exist")).andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void draftCreationIsAttributedToTheTokenUser() throws Exception {
+        mvc.perform(post("/api/release/drafts").header(AUTH, bearer("alice", Role.APPROVER)).contentType(JSON)
+                        .content("{\"tag\":\"v9.9.9\",\"prerelease\":true}"))
+                .andExpect(status().isCreated());
+
+        verify(drafts).create("v9.9.9", true, "alice");
+    }
 }

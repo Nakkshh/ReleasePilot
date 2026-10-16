@@ -15,6 +15,7 @@ public record DraftSummary(
         String verdictStatus,
         Instant createdAt,
         Instant expiresAt,
-        Instant decidedAt
+        Instant decidedAt,
+        String createdBy
 ) {
 }

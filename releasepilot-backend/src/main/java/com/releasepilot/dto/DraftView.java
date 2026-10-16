@@ -33,6 +33,7 @@ public record DraftView(
         Long githubReleaseId,
         String githubReleaseUrl,
         Instant releasedAt,
-        String lastError
+        String lastError,
+        String createdBy
 ) {
 }

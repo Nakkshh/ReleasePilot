@@ -63,7 +63,12 @@ public class DraftService {
      * Deliberately NOT @Transactional: the agents make slow LLM calls and no DB transaction
      * should be held open across them. Only the final save() runs in its own transaction.
      */
+
     public DraftView create(String tag, boolean prerelease) {
+        return create(tag, prerelease, null);
+    }
+
+    public DraftView create(String tag, boolean prerelease, String createdBy) {
         // 1. Cheap guards first, before any LLM call.
         if (drafts.existsByTagAndStatusIn(tag, List.of(DraftStatus.APPROVED, DraftStatus.RELEASED))) {
             throw new DraftConflictException("TAG_IN_USE",
@@ -104,6 +109,7 @@ public class DraftService {
                 cut(notes.baseline(), 300),
                 targetSha,
                 now, now.plus(ttl));
+        draft.setCreatedBy(clean(createdBy, 100, null));
         draft = drafts.save(draft);
 
         log.info("[DRAFT] created id={} tag={} verdict={} invalidRefs={} prs={} target={}",
@@ -187,13 +193,15 @@ public class DraftService {
                 n.invalidReferences(), n.omittedPrs(), warnings,
                 d.getDecidedAt(), d.getDecidedBy(), d.getDecisionComment(),
                 d.isOverrideUsed(), d.getOverrideReason(),
-                d.getGithubReleaseId(), d.getGithubReleaseUrl(), d.getReleasedAt(), d.getLastError());
+                d.getGithubReleaseId(), d.getGithubReleaseUrl(), d.getReleasedAt(), d.getLastError(),
+                d.getCreatedBy());
     }
+
 
     private DraftSummary summary(ReleaseDraft d) {
         return new DraftSummary(d.getId(), d.getTag(), d.isPrerelease(), d.getTitle(), d.getStatus(),
                 gateOf(d, clock.instant()), d.getVerdictStatus(),
-                d.getCreatedAt(), d.getExpiresAt(), d.getDecidedAt());
+                d.getCreatedAt(), d.getExpiresAt(), d.getDecidedAt(), d.getCreatedBy());
     }
 
     private ReleaseDraft find(long id) {

@@ -1,5 +1,6 @@
 package com.releasepilot.config;
 
+import com.releasepilot.auth.AccountGuard;
 import com.releasepilot.auth.JsonSecurityErrorHandler;
 import com.releasepilot.auth.JwtService;
 import org.springframework.context.annotation.Bean;
@@ -11,7 +12,9 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -25,9 +28,16 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /** Signature + expiry first, then the account check (user enabled, not stale, roles from the DB). */
     @Bean
-    public JwtDecoder jwtDecoder(JwtService jwtService) {
-        return jwtService.decoder();
+    public JwtDecoder jwtDecoder(JwtService jwtService, AccountGuard guard) {
+        JwtDecoder base = jwtService.decoder();
+        return new JwtDecoder() {
+            @Override
+            public Jwt decode(String token) throws JwtException {
+                return guard.verify(base.decode(token));
+            }
+        };
     }
 
     /** Reads the "roles" claim (["ADMIN","APPROVER"]) as ROLE_ADMIN / ROLE_APPROVER. */
@@ -56,7 +66,7 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()   // error dispatches are authorised too
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/auth/password").authenticated()
 
                         // Read-only demo: anyone may look at drafts, search the knowledge base and run the agents.
                         .requestMatchers(HttpMethod.GET, "/api/release/drafts", "/api/release/drafts/**").permitAll()
@@ -66,6 +76,7 @@ public class SecurityConfig {
                         // Anything that changes a release needs an approver; admins carry that role too.
                         .requestMatchers("/api/release/**").hasRole("APPROVER")
                         .requestMatchers("/api/knowledge/**").hasRole("ADMIN")   // reindex
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")       // user management
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
 
                         // Default deny: /api/chat, /api/analyze and anything unknown need a login.

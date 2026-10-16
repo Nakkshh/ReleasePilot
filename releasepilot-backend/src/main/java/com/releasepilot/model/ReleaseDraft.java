@@ -84,6 +84,9 @@ public class ReleaseDraft {
     @Column(name = "last_error", columnDefinition = "text")
     private String lastError;
 
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
+
     @Version
     private long version;
 
@@ -176,5 +179,7 @@ public class ReleaseDraft {
     public Instant getReleasedAt() { return releasedAt; }
     public String getLastError() { return lastError; }
     public long getVersion() { return version; }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
 
 }
