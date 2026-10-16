@@ -9,6 +9,8 @@ import com.releasepilot.service.DraftService;
 import com.releasepilot.service.ReleasePublisher;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * GET endpoints are public (read-only demo). Every other method requires the APPROVER role (see SecurityConfig).
+ * The "decidedBy" field in request bodies is ignored: the decider is always the authenticated user.
+ */
 @RestController
 @RequestMapping("/api/release/drafts")
 public class ReleaseDraftController {
@@ -49,17 +55,19 @@ public class ReleaseDraftController {
 
     @PostMapping("/{id}/reject")
     public DraftView reject(@PathVariable long id,
-                            @Valid @RequestBody(required = false) RejectRequest request) {
-        return service.reject(id,
-                request == null ? null : request.decidedBy(),
-                request == null ? null : request.comment());
+                            @Valid @RequestBody(required = false) RejectRequest request,
+                            @AuthenticationPrincipal Jwt jwt) {
+        return service.reject(id, jwt.getSubject(), request == null ? null : request.comment());
     }
 
     @PostMapping("/{id}/approve")
     public DraftView approve(@PathVariable long id,
-                             @Valid @RequestBody(required = false) ApproveRequest request) {
-        ApproveRequest r = request == null ? new ApproveRequest(null, null, null, null, null) : request;
-        return publisher.approve(id, r);
+                             @Valid @RequestBody(required = false) ApproveRequest request,
+                             @AuthenticationPrincipal Jwt jwt) {
+        ApproveRequest in = request == null ? new ApproveRequest(null, null, null, null, null) : request;
+        ApproveRequest verified = new ApproveRequest(
+                jwt.getSubject(), in.comment(), in.override(), in.overrideReason(), in.title());
+        return publisher.approve(id, verified);
     }
 
     @PostMapping("/{id}/retry")

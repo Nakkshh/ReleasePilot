@@ -10,6 +10,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import com.releasepilot.agent.LlmRateLimit;
+import org.springframework.http.HttpHeaders;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -36,6 +38,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(GeminiServiceException.class)
     public ResponseEntity<ErrorResponse> handleGeminiFailure(GeminiServiceException ex) {
+
+        if (LlmRateLimit.isRateLimited(ex)) {
+            return rateLimited(ex);
+        }
+
         log.error("AI service failure: {}", ex.getMessage(), ex);
 
         ErrorResponse body = new ErrorResponse(
@@ -48,6 +55,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        if (LlmRateLimit.isRateLimited(ex)) {
+            return rateLimited(ex);
+        }
         log.error("Unhandled exception", ex);
         ErrorResponse body = new ErrorResponse(
                 "INTERNAL_ERROR",
@@ -106,13 +116,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
-    @ExceptionHandler(AdminAuthException.class)
-    public ResponseEntity<ErrorResponse> handleAdminAuth(AdminAuthException ex) {
-        log.warn("Admin guard rejected a request: {}", ex.getCode());
-        ErrorResponse body = new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now());
-        return ResponseEntity.status(ex.getStatus()).body(body);
-    }
-
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
         ErrorResponse body = new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now());
@@ -124,5 +127,31 @@ public class GlobalExceptionHandler {
         ErrorResponse body = new ErrorResponse("BAD_REQUEST",
                 "Missing required parameter '" + ex.getParameterName() + "'.", Instant.now());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(ClientRateLimitedException.class)
+    public ResponseEntity<ErrorResponse> handleClientRateLimited(ClientRateLimitedException ex) {
+        log.warn("Request limited [{}]: {}", ex.getCode(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.getRetryAfterSeconds()))
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now()));
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ResponseEntity<ErrorResponse> handleAuth(AuthException ex) {
+        log.warn("Auth request rejected: {}", ex.getCode());
+        ErrorResponse body = new ErrorResponse(ex.getCode(), ex.getMessage(), Instant.now());
+        return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    private ResponseEntity<ErrorResponse> rateLimited(Exception ex) {
+        var retryAfter = LlmRateLimit.retryAfterSeconds(ex);
+        log.warn("LLM provider rate limit (retryAfter={}s)", retryAfter.isPresent() ? retryAfter.getAsLong() : "n/a");
+        String message = retryAfter.isPresent()
+                ? "The AI provider is rate limiting requests. Try again in " + retryAfter.getAsLong() + " seconds."
+                : "The AI provider is rate limiting requests. Try again shortly.";
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        retryAfter.ifPresent(s -> response.header(HttpHeaders.RETRY_AFTER, Long.toString(s)));
+        return response.body(new ErrorResponse("LLM_RATE_LIMITED", message, Instant.now()));
     }
 }

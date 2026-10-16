@@ -26,11 +26,13 @@ public class GitHubActionsClient {
     private final RestClient download;  // plain client for the pre-signed log URL (no auth header)
     private final String owner;
     private final String repo;
+    private final GitHubCache cache;
 
     public GitHubActionsClient(@Value("${github.api.base-url}") String baseUrl,
                                @Value("${github.token:}") String token,
                                @Value("${github.repo.owner}") String owner,
-                               @Value("${github.repo.name}") String repo) {
+                               @Value("${github.repo.name}") String repo,
+                               GitHubCache cache) {
         HttpClient noRedirects = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
@@ -48,24 +50,29 @@ public class GitHubActionsClient {
         this.download = RestClient.create();
         this.owner = owner;
         this.repo = repo;
+        this.cache = cache;
     }
 
     public List<ActionsModels.Run> listRuns(int count) {
-        ActionsModels.RunsResponse resp = api.get()
-                .uri("/repos/{o}/{r}/actions/runs?per_page={n}", owner, repo, count)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::fail)
-                .body(ActionsModels.RunsResponse.class);
-        return (resp == null || resp.runs() == null) ? List.of() : resp.runs();
+        return cache.get("runs:" + count, () -> {
+            ActionsModels.RunsResponse resp = api.get()
+                    .uri("/repos/{o}/{r}/actions/runs?per_page={n}", owner, repo, count)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, this::fail)
+                    .body(ActionsModels.RunsResponse.class);
+            return (resp == null || resp.runs() == null) ? List.<ActionsModels.Run>of() : resp.runs();
+        });
     }
 
     public List<ActionsModels.Job> listJobs(long runId) {
-        ActionsModels.JobsResponse resp = api.get()
-                .uri("/repos/{o}/{r}/actions/runs/{id}/jobs?filter=latest&per_page=100", owner, repo, runId)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::fail)
-                .body(ActionsModels.JobsResponse.class);
-        return (resp == null || resp.jobs() == null) ? List.of() : resp.jobs();
+        return cache.get("jobs:" + runId, () -> {
+            ActionsModels.JobsResponse resp = api.get()
+                    .uri("/repos/{o}/{r}/actions/runs/{id}/jobs?filter=latest&per_page=100", owner, repo, runId)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, this::fail)
+                    .body(ActionsModels.JobsResponse.class);
+            return (resp == null || resp.jobs() == null) ? List.<ActionsModels.Job>of() : resp.jobs();
+        });
     }
 
     /** GitHub answers 302 with a Location header (valid ~1 min); we then fetch that URL without auth. */

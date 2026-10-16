@@ -23,13 +23,16 @@ public class GitHubClient {
     private final RestClient rest;
     private final String owner;
     private final String repo;
+    private final GitHubCache cache;
 
     public GitHubClient(RestClient githubRestClient,
                         @Value("${github.repo.owner}") String owner,
-                        @Value("${github.repo.name}") String repo) {
+                        @Value("${github.repo.name}") String repo,
+                        GitHubCache cache) {
         this.rest = githubRestClient;
         this.owner = owner;
         this.repo = repo;
+        this.cache = cache;
     }
 
     public GitHubModels.Repo getRepository() {
@@ -49,27 +52,27 @@ public class GitHubClient {
     }
 
     public List<GitHubModels.Pull> getOpenPullRequests() {
-        return rest.get()
+        return cache.get("openPulls", () -> rest.get()
                 .uri("/repos/{o}/{r}/pulls?state=open&per_page=30", owner, repo)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, this::fail)
-                .body(new ParameterizedTypeReference<List<GitHubModels.Pull>>() {});
+                .body(new ParameterizedTypeReference<List<GitHubModels.Pull>>() {}));
     }
 
     public List<GitHubModels.Issue> getOpenIssues() {
-        return rest.get()
+        return cache.get("openIssues", () -> rest.get()
                 .uri("/repos/{o}/{r}/issues?state=open&per_page=30", owner, repo)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, this::fail)
-                .body(new ParameterizedTypeReference<List<GitHubModels.Issue>>() {});
+                .body(new ParameterizedTypeReference<List<GitHubModels.Issue>>() {}));
     }
 
     public List<GitHubModels.Review> getReviews(int pullNumber) {
-        return rest.get()
+        return cache.get("reviews:" + pullNumber, () -> rest.get()
                 .uri("/repos/{o}/{r}/pulls/{n}/reviews?per_page=100", owner, repo, pullNumber)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, this::fail)
-                .body(new ParameterizedTypeReference<List<GitHubModels.Review>>() {});
+                .body(new ParameterizedTypeReference<List<GitHubModels.Review>>() {}));
     }
 
     private void fail(org.springframework.http.HttpRequest request, ClientHttpResponse response)
@@ -93,17 +96,17 @@ public class GitHubClient {
     }
 
     public List<GitHubModels.ClosedPull> getClosedPullRequests(int perPage) {
-        return rest.get()
+        return cache.get("closedPulls:" + perPage, () -> rest.get()
                 .uri("/repos/{o}/{r}/pulls?state=closed&sort=updated&direction=desc&per_page={n}",
                         owner, repo, perPage)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, this::fail)
-                .body(new ParameterizedTypeReference<List<GitHubModels.ClosedPull>>() {});
+                .body(new ParameterizedTypeReference<List<GitHubModels.ClosedPull>>() {}));
     }
 
     /** Returns null when the repo has no published release (GitHub answers 404). */
     public GitHubModels.Release getLatestRelease() {
-        return rest.get()
+        return cache.get("latestRelease", () -> rest.get()
                 .uri("/repos/{o}/{r}/releases/latest", owner, repo)
                 .exchange((request, response) -> {
                     if (response.getStatusCode().value() == 404) {
@@ -113,7 +116,7 @@ public class GitHubClient {
                         fail(request, response);   // throws GitHubApiException, as elsewhere
                     }
                     return response.bodyTo(GitHubModels.Release.class);
-                });
+                }));
     }
 
     /** True if the git tag exists. Uses the exact-match ref endpoint; 404 means no such tag. */
@@ -162,7 +165,7 @@ public class GitHubClient {
         payload.put("prerelease", prerelease);
         payload.put("generate_release_notes", false);
 
-        return rest.post()
+        GitHubModels.Release created = rest.post()
                 .uri("/repos/{o}/{r}/releases", owner, repo)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(payload)
@@ -184,6 +187,9 @@ public class GitHubClient {
                     fail(request, response);   // always throws (401, 403, rate limit, other)
                     return null;
                 });
+
+        cache.invalidateAll();
+        return created;
     }
 
     private static String snippet(String s) {

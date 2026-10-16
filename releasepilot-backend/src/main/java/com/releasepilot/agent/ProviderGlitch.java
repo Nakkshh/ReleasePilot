@@ -23,6 +23,9 @@ public final class ProviderGlitch {
 
     /** True if the exception, or any of its causes, carries a known glitch marker. */
     public static boolean matches(Throwable t) {
+        if (LlmRateLimit.isRateLimited(t)) {
+            return false;
+        }
         int depth = 0;
         while (t != null && depth++ < MAX_DEPTH) {
             String m = t.getMessage();

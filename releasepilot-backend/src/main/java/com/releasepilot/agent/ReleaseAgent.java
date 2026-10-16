@@ -267,6 +267,10 @@ public class ReleaseAgent {
                         run.modelCalls(), 0, msSince(start),
                         run.promptTokens(), run.completionTokens(), Instant.now());
             } catch (Exception e) {
+                if (LlmRateLimit.isRateLimited(e)) {
+                    log.warn("[AGENT-FALLBACK] LLM rate limited, not retrying: {}", ProviderGlitch.describe(e));
+                    throw new GeminiServiceException("Release check hit the LLM rate limit", e);
+                }
                 AgentBudgetExceededException budget = findBudgetException(e);
                 if (budget != null) {
                     throw budget;
