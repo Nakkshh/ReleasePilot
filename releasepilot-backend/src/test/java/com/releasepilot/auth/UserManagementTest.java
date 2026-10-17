@@ -261,4 +261,4 @@ class UserManagementTest {
                 .andExpect(status().isUnauthorized());
         login("alice", "another-long-passphrase-1");
     }
-}Invoke-RestMethod -Method Post "$base/admin/users/$id/disable" -Headers $A
+}

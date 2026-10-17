@@ -151,7 +151,7 @@ class DraftWorkflowTest {
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(github, times(1)).createRelease(eq("v1.0.0"), eq(SHA), any(), body.capture(), eq(false));
-        assertThat(body.getValue()).contains("## Features", "#2 feat: add thing (@dev)",
+        assertThat(body.getValue()).contains("## Features", "#2 feat: add thing (@\u200Bdev)",
                 "## Fixes", "draft #" + d.getId());
     }
 

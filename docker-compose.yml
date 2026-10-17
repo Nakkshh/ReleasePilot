@@ -1,0 +1,40 @@
+name: releasepilot
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${DB_USER:?set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: releasepilot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d releasepilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # No published ports: only the app container can reach this database.
+
+  app:
+    build: ./releasepilot-backend
+    container_name: releasepilot-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8080"        # 8081 on the host so it does not clash with a dev run on 8080
+    mem_limit: 1g          # starting point; tune after measuring
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/releasepilot
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      GROQ_API_KEY: ${GROQ_API_KEY:?set GROQ_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?set GITHUB_TOKEN}
+      RELEASEPILOT_JWT_SECRET: ${RELEASEPILOT_JWT_SECRET:?set RELEASEPILOT_JWT_SECRET}
+      RELEASEPILOT_BOOTSTRAP_USER: ${RELEASEPILOT_BOOTSTRAP_USER:-}
+      RELEASEPILOT_BOOTSTRAP_PASSWORD: ${RELEASEPILOT_BOOTSTRAP_PASSWORD:-}
+      RELEASEPILOT_CORS_ORIGINS: ${RELEASEPILOT_CORS_ORIGINS:-}
+
+volumes:
+  pgdata:

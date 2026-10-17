@@ -5,6 +5,7 @@ import com.releasepilot.dto.ReleaseNotesResponse;
 import com.releasepilot.dto.github.GitHubModels;
 import com.releasepilot.exception.GeminiServiceException;
 import com.releasepilot.service.GitHubClient;
+import com.releasepilot.security.UntrustedText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -146,13 +147,9 @@ public class ReleaseNotesAgent {
         return sb.toString();
     }
 
-    /** Single line, length-capped, so a title cannot fake extra entries or break the markers. */
+    /** Single line, length-capped, delimiters defanged, so a title cannot fake entries or break the markers. */
     private static String clean(String s) {
-        if (s == null) {
-            return "";
-        }
-        String one = s.replaceAll("\\s+", " ").replace("PULL_REQUESTS>>>", "").strip();
-        return one.length() <= MAX_TITLE_CHARS ? one : one.substring(0, MAX_TITLE_CHARS) + "...";
+        return UntrustedText.line(s, MAX_TITLE_CHARS);
     }
 
     private static Set<Integer> referencedNumbers(ReleaseNotes n) {

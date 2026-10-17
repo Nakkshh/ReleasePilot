@@ -1,14 +1,24 @@
 package com.releasepilot.auth;
 
 import com.releasepilot.dto.ApproveRequest;
+import com.releasepilot.dto.DraftSummary;
+import com.releasepilot.dto.DraftView;
+import com.releasepilot.dto.ReleaseNotes;
+import com.releasepilot.dto.ReleaseVerdict;
 import com.releasepilot.knowledge.KnowledgeIngestionService;
 import com.releasepilot.knowledge.KnowledgeSearchService;
+import com.releasepilot.model.ApprovalGate;
+import com.releasepilot.model.DraftStatus;
 import com.releasepilot.model.Role;
 import com.releasepilot.service.AgentService;
 import com.releasepilot.service.DraftService;
 import com.releasepilot.service.ReleasePublisher;
 import com.releasepilot.tool.GitHubActionsTools;
 import com.releasepilot.tool.GitHubTools;
+
+import java.time.Instant;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,14 +36,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@TestPropertySource(properties = "ratelimit.agent.enabled=false")   // this class tests who may call, not how often
+@TestPropertySource(properties = {"ratelimit.agent.enabled=false", "cors.allowed-origins=https://app.example.com"})   // this class tests who may call, not how often
 class RouteSecurityTest {
 
     private static final String AUTH = "Authorization";
@@ -173,5 +184,83 @@ class RouteSecurityTest {
                 .andExpect(status().isCreated());
 
         verify(drafts).create("v9.9.9", true, "alice");
+    }
+
+    @Test
+    void anonymousDraftViewsHideInternalFieldsButSignedInUsersSeeThem() throws Exception {
+        when(drafts.get(7L)).thenReturn(new DraftView(
+                7L, "v1.2.3", false, "t", DraftStatus.APPROVED, ApprovalGate.CLOSED, "since v1.2.2", "abc123",
+                Instant.EPOCH, Instant.EPOCH, new ReleaseVerdict("NOT_READY", "s", List.of(), List.of()), "agent",
+                new ReleaseNotes("t", "s", List.of(), List.of(), List.of(), List.of()), 1, List.of(), List.of(),
+                List.of(), Instant.EPOCH, "bob", "looks fine", true, "hotfix for prod outage", null, null, null,
+                "GitHub said 404", "alice"));
+        when(drafts.list()).thenReturn(List.of(new DraftSummary(7L, "v1.2.3", false, "t", DraftStatus.APPROVED,
+                ApprovalGate.CLOSED, "NOT_READY", Instant.EPOCH, Instant.EPOCH, Instant.EPOCH, "alice")));
+
+        mvc.perform(get("/api/release/drafts/7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tag").value("v1.2.3"))
+                .andExpect(jsonPath("$.overrideUsed").value(true))
+                .andExpect(jsonPath("$.hasError").value(true))
+                .andExpect(jsonPath("$.lastError").doesNotExist())
+                .andExpect(jsonPath("$.overrideReason").doesNotExist())
+                .andExpect(jsonPath("$.decisionComment").doesNotExist())
+                .andExpect(jsonPath("$.decidedBy").doesNotExist())
+                .andExpect(jsonPath("$.createdBy").doesNotExist());
+        mvc.perform(get("/api/release/drafts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tag").value("v1.2.3"))
+                .andExpect(jsonPath("$[0].createdBy").doesNotExist());
+
+        mvc.perform(get("/api/release/drafts/7").header(AUTH, bearer("alice", Role.APPROVER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastError").value("GitHub said 404"))
+                .andExpect(jsonPath("$.overrideReason").value("hotfix for prod outage"))
+                .andExpect(jsonPath("$.createdBy").value("alice"));
+        mvc.perform(get("/api/release/drafts").header(AUTH, bearer("alice", Role.APPROVER)))
+                .andExpect(jsonPath("$[0].createdBy").value("alice"));
+    }
+
+    private static final String APP_ORIGIN = "https://app.example.com";
+
+    @Test
+    void responsesCarryTheSecurityHeaders() throws Exception {
+        mvc.perform(get("/api/health"))
+                .andExpect(header().string("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
+        mvc.perform(get("/api/admin/users"))   // error answers carry them too
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Referrer-Policy", "no-referrer"));
+    }
+
+    @Test
+    void preflightFromTheConfiguredOriginIsAnswered() throws Exception {
+        mvc.perform(options("/api/release/drafts")
+                        .header("Origin", APP_ORIGIN)
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "authorization,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", APP_ORIGIN))
+                .andExpect(header().exists("Access-Control-Allow-Methods"))
+                .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+    }
+
+    @Test
+    void otherOriginsAreRefused() throws Exception {
+        mvc.perform(options("/api/release/drafts")
+                        .header("Origin", "https://evil.example")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    void actualResponsesToTheAppExposeRetryAfter() throws Exception {
+        mvc.perform(get("/api/health").header("Origin", APP_ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", APP_ORIGIN))
+                .andExpect(header().string("Access-Control-Expose-Headers", "Retry-After"));
     }
 }

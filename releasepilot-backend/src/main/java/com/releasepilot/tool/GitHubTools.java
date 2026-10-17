@@ -3,6 +3,7 @@ package com.releasepilot.tool;
 import com.releasepilot.dto.github.GitHubModels;
 import com.releasepilot.exception.GitHubApiException;
 import com.releasepilot.service.GitHubClient;
+import com.releasepilot.security.UntrustedText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -59,8 +60,8 @@ public class GitHubTools {
                 return "No open pull requests.";
             }
             return pulls.stream()
-                    .map(p -> "#" + p.number() + " " + p.title()
-                            + " (by " + (p.user() == null ? "unknown" : p.user().login())
+                    .map(p -> "#" + p.number() + " " + UntrustedText.line(p.title(), 200)
+                            + " (by " + (p.user() == null ? "unknown" : UntrustedText.line(p.user().login(), 60))
                             + (Boolean.TRUE.equals(p.draft()) ? ", draft" : "") + ")")
                     .collect(Collectors.joining("\n"));
         } catch (GitHubApiException e) {
@@ -80,10 +81,10 @@ public class GitHubTools {
                 return "No open issues.";
             }
             return issues.stream()
-                    .map(i -> "#" + i.number() + " " + i.title() + " ("
+                    .map(i -> "#" + i.number() + " " + UntrustedText.line(i.title(), 200) + " ("
                             + (i.labels() == null || i.labels().isEmpty()
                             ? "no labels"
-                            : i.labels().stream().map(GitHubModels.Label::name)
+                            : i.labels().stream().map(l -> UntrustedText.line(l.name(), 50))
                             .collect(Collectors.joining(", ")))
                             + ")")
                     .collect(Collectors.joining("\n"));
@@ -111,7 +112,7 @@ public class GitHubTools {
             }
             return commits.stream()
                     .map(c -> c.sha().substring(0, 7) + " " + firstLine(c.commit().message())
-                            + " (" + c.commit().author().name() + ", " + c.commit().author().date() + ")")
+                            + " (" + UntrustedText.line(c.commit().author().name(), 60) + ", " + c.commit().author().date() + ")")
                     .collect(Collectors.joining("\n"));
         } catch (GitHubApiException e) {
             return "ERROR: " + e.getMessage();
@@ -153,7 +154,7 @@ public class GitHubTools {
         for (GitHubModels.Review r : reviews) {
             String s = r.state();
             if ("APPROVED".equals(s) || "CHANGES_REQUESTED".equals(s) || "DISMISSED".equals(s)) {
-                String login = r.user() == null ? "unknown" : r.user().login();
+                String login = r.user() == null ? "unknown" : UntrustedText.line(r.user().login(), 60);
                 standing.put(login, r);
             }
         }
@@ -167,7 +168,7 @@ public class GitHubTools {
                 .map(e -> e.getKey() + " " + e.getValue().state() + staleNote(e.getValue(), headSha))
                 .collect(Collectors.joining("; "));
 
-        return "PR #" + number + (title == null ? "" : " \"" + title + "\"")
+        return "PR #" + number + (title == null ? "" : " \"" + UntrustedText.line(title, 200) + "\"")
                 + ": overall=" + overall + "; reviewers: " + reviewers
                 + (headSha == null ? " (staleness not checked)" : "");
     }
@@ -183,7 +184,7 @@ public class GitHubTools {
             return "";
         }
         int nl = message.indexOf('\n');
-        return nl < 0 ? message : message.substring(0, nl);
+        return UntrustedText.line(nl < 0 ? message : message.substring(0, nl), 200);
     }
 
     public GitHubModels.Release getLatestRelease() {

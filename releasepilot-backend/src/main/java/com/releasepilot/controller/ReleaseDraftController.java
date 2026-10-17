@@ -4,6 +4,8 @@ import com.releasepilot.dto.ApproveRequest;
 import com.releasepilot.dto.CreateDraftRequest;
 import com.releasepilot.dto.DraftSummary;
 import com.releasepilot.dto.DraftView;
+import com.releasepilot.dto.PublicDraftSummary;
+import com.releasepilot.dto.PublicDraftView;
 import com.releasepilot.dto.RejectRequest;
 import com.releasepilot.service.DraftService;
 import com.releasepilot.service.ReleasePublisher;
@@ -43,14 +45,20 @@ public class ReleaseDraftController {
         return service.create(request.tag(), Boolean.TRUE.equals(request.prerelease()), jwt.getSubject());
     }
 
+    /** Anonymous visitors get the trimmed view; any signed-in user (APPROVER or ADMIN) gets the full one. */
     @GetMapping
-    public List<DraftSummary> list() {
-        return service.list();
+    public List<?> list(@AuthenticationPrincipal Jwt jwt) {
+        List<DraftSummary> all = service.list();
+        if (jwt != null) {
+            return all;
+        }
+        return all.stream().map(PublicDraftSummary::from).toList();
     }
 
     @GetMapping("/{id}")
-    public DraftView get(@PathVariable long id) {
-        return service.get(id);
+    public Object get(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
+        DraftView view = service.get(id);
+        return jwt != null ? view : PublicDraftView.from(view);
     }
 
     @PostMapping("/{id}/reject")

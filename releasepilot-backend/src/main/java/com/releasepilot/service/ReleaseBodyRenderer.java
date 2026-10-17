@@ -1,6 +1,8 @@
 package com.releasepilot.service;
 
 import com.releasepilot.dto.ReleaseNotes;
+import com.releasepilot.security.UntrustedText;
+import java.util.regex.Pattern;
 
 import java.util.List;
 
@@ -36,8 +38,19 @@ final class ReleaseBodyRenderer {
         sb.append("\n");
     }
 
-    /** PR titles are untrusted input; neutralise raw HTML before it lands on a public page. */
+    private static final Pattern MENTION = Pattern.compile("@(?=[A-Za-z0-9])");
+
+    /**
+     * Titles are untrusted and the body lands on a public GitHub page. One line only (no fake headings),
+     * no raw HTML, no markdown links or images, no live @mentions.
+     */
     private static String esc(String s) {
-        return s == null ? "" : s.replace("<", "&lt;");
+        String t = UntrustedText.singleLine(s)
+                .replace("\\", "\\\\")        // first, so the escapes below cannot be cancelled
+                .replace("<", "&lt;")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("`", "\\`");
+        return MENTION.matcher(t).replaceAll("@\u200B");   // zero-width space: still reads "@dev", no longer a mention
     }
 }

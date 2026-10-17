@@ -3,6 +3,7 @@ package com.releasepilot.tool;
 import com.releasepilot.dto.github.ActionsModels;
 import com.releasepilot.exception.GitHubApiException;
 import com.releasepilot.service.GitHubActionsClient;
+import com.releasepilot.security.UntrustedText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -99,7 +100,7 @@ public class GitHubActionsTools {
             }
             Long finalId = id;
             return failed.stream()
-                    .map(j -> "Run " + finalId + ", job \"" + j.name() + "\" (job id " + j.id()
+                    .map(j -> "Run " + finalId + ", job \"" + UntrustedText.line(j.name(), 100) + "\" (job id " + j.id()
                             + ") failed. Failed steps: " + failedSteps(j))
                     .collect(Collectors.joining("\n"));
         } catch (GitHubApiException e) {
@@ -146,17 +147,18 @@ public class GitHubActionsTools {
         }
         String names = job.steps().stream()
                 .filter(s -> "failure".equals(s.conclusion()))
-                .map(ActionsModels.Step::name)
+                .map(s -> UntrustedText.line(s.name(), 100))
                 .collect(Collectors.joining(", "));
         return names.isEmpty() ? "(none reported)" : names;
     }
 
     private static String format(ActionsModels.Run r) {
         String sha = r.headSha() == null ? "?" : r.headSha().substring(0, Math.min(7, r.headSha().length()));
-        return "Run " + r.id() + " #" + r.runNumber() + " \"" + r.name() + "\" on " + r.headBranch()
+        return "Run " + r.id() + " #" + r.runNumber() + " \"" + UntrustedText.line(r.name(), 100) + "\" on "
+                + UntrustedText.line(r.headBranch(), 100)
                 + " @" + sha + " - " + r.status()
                 + (r.conclusion() == null ? "" : "/" + r.conclusion())
-                + " (" + r.event() + ", " + r.createdAt() + ") " + r.htmlUrl();
+                + " (" + UntrustedText.line(r.event(), 30) + ", " + r.createdAt() + ") " + r.htmlUrl();
     }
 
     private static String tail(String raw) {
@@ -170,7 +172,7 @@ public class GitHubActionsTools {
                 .filter(l -> !l.startsWith("##[endgroup]"))
                 .toList();
         int from = Math.max(0, lines.size() - MAX_LOG_LINES);
-        String out = String.join("\n", lines.subList(from, lines.size())).strip();
+        String out = UntrustedText.defang(String.join("\n", lines.subList(from, lines.size())).strip());
         return out.length() > MAX_LOG_CHARS ? out.substring(out.length() - MAX_LOG_CHARS) : out;
     }
 }
