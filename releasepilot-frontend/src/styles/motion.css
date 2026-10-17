@@ -1,0 +1,8 @@
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .nav-item, .button, .icon-button, .user-avatar, .choice-button, .accent-swatch, .draft-list-row, .quick-action, .suggested-prompt, .sidebar { transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+  .button-primary:hover:not(:disabled) { transform: translateY(-1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

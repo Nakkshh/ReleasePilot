@@ -1,0 +1,20 @@
+:root, :root[data-theme="system"] {
+  --canvas: light-dark(#F1F5F9, #0B1020);
+  --surface: light-dark(#FFFFFF, #121A2B);
+  --surface-raised: light-dark(#FFFFFF, #172237);
+  --surface-subtle: light-dark(#F8FAFC, #19263B);
+  --text: light-dark(#111827, #EDF2FF);
+  --text-secondary: light-dark(#667085, #9AA8C2);
+  --text-tertiary: light-dark(#98A2B3, #73819B);
+  --border: light-dark(#E2E8F0, #28354C);
+  --border-strong: light-dark(#CBD5E1, #3B4B65);
+  --accent-soft: rgba(var(--accent-rgb), .10);
+  --accent-border: rgba(var(--accent-rgb), .30);
+  --success-soft: light-dark(#DCFCE7, #123523);
+  --warning-soft: light-dark(#FEF3C7, #3B2A12);
+  --danger-soft: light-dark(#FEE2E2, #3D1C25);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04);
+  --shadow-md: 0 12px 36px rgba(15, 23, 42, .09);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
