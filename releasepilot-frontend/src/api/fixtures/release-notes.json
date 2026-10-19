@@ -1,0 +1,19 @@
+{
+  "notes": {
+    "title": "Sample release notes",
+    "summary": "No live generation was requested.",
+    "features": [],
+    "fixes": [],
+    "chores": [],
+    "breakingChanges": []
+  },
+  "baseline": "Demo fixture",
+  "prCount": 0,
+  "invalidReferences": [],
+  "omittedPrs": [],
+  "modelCalls": 0,
+  "elapsedMs": 0,
+  "promptTokens": null,
+  "completionTokens": null,
+  "timestamp": "2026-10-17T10:15:00Z"
+}

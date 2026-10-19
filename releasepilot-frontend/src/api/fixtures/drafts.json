@@ -1,0 +1,38 @@
+﻿[
+    {
+        "id":  3,
+        "tag":  "v1.0.11",
+        "prerelease":  false,
+        "title":  "Release notes â documentation and health endpoint updates",
+        "status":  "REJECTED",
+        "approvalGate":  "CLOSED",
+        "verdictStatus":  "READY",
+        "createdAt":  "2026-10-16T07:34:11.015597Z",
+        "expiresAt":  "2026-10-17T07:34:11.015597Z",
+        "decidedAt":  "2026-10-16T07:34:29.380587Z"
+    },
+    {
+        "id":  2,
+        "tag":  "v1.0.10",
+        "prerelease":  false,
+        "title":  "Release notes â health endpoint improvements",
+        "status":  "REJECTED",
+        "approvalGate":  "CLOSED",
+        "verdictStatus":  "READY",
+        "createdAt":  "2026-10-16T04:13:04.657579Z",
+        "expiresAt":  "2026-10-17T04:13:04.657579Z",
+        "decidedAt":  "2026-10-16T04:13:30.321244Z"
+    },
+    {
+        "id":  1,
+        "tag":  "v1.0.9",
+        "prerelease":  false,
+        "title":  "Release notes â Docs and health updates",
+        "status":  "EXPIRED",
+        "approvalGate":  "CLOSED",
+        "verdictStatus":  "READY",
+        "createdAt":  "2026-10-15T15:48:42.208009Z",
+        "expiresAt":  "2026-10-16T15:48:42.208009Z",
+        "decidedAt":  "2026-10-16T15:48:42.208009Z"
+    }
+]

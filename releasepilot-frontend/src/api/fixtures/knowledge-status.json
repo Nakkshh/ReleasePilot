@@ -1,0 +1,33 @@
+﻿{
+    "indexedChunks":  31,
+    "sources":  [
+                    {
+                        "source":  "ci-failure-triage.md",
+                        "chunks":  5
+                    },
+                    {
+                        "source":  "hotfix-process.md",
+                        "chunks":  5
+                    },
+                    {
+                        "source":  "release-notes-style.md",
+                        "chunks":  5
+                    },
+                    {
+                        "source":  "release-policy.md",
+                        "chunks":  6
+                    },
+                    {
+                        "source":  "rollback-runbook.md",
+                        "chunks":  5
+                    },
+                    {
+                        "source":  "versioning.md",
+                        "chunks":  5
+                    }
+                ],
+    "filesOnClasspath":  6,
+    "chunksOnClasspath":  31,
+    "currentCorpusHash":  "0d26071ef5c4433a45f895a5cb8e408001f0ee5ab1861fefcb18b8053295b58f",
+    "upToDate":  true
+}

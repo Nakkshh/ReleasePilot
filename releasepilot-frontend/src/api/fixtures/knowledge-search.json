@@ -1,0 +1,20 @@
+{
+  "query": "deployment rollback",
+  "topK": 2,
+  "minScore": 0,
+  "elapsedMs": 8,
+  "hits": [
+    {
+      "source": "runbooks/rollback-runbook.md",
+      "heading": "Rollback procedure",
+      "score": 0.91,
+      "text": "Review the last known good version, validate service health and follow the approved rollback procedure."
+    },
+    {
+      "source": "knowledge/release-policy.md",
+      "heading": "Release readiness",
+      "score": 0.83,
+      "text": "Verify test evidence, release notes and the required approval before publishing."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "24": {
+    "id": 24,
+    "tag": "v2.4.0",
+    "title": "Release v2.4.0",
+    "status": "PENDING",
+    "approvalGate": "OPEN",
+    "baseline": null,
+    "targetSha": null,
+    "createdAt": "2026-10-17T10:15:00Z",
+    "expiresAt": null,
+    "verdict": {
+      "status": "READY",
+      "reasons": [],
+      "blockers": []
+    },
+    "checkMode": "demo",
+    "notes": null,
+    "prCount": 0,
+    "invalidReferences": [],
+    "omittedPrs": [],
+    "warnings": [
+      "Illustrative fixture; not a live backend response."
+    ],
+    "decidedAt": null,
+    "decidedBy": null,
+    "decisionComment": null,
+    "overrideUsed": false,
+    "overrideReason": null,
+    "githubReleaseId": null,
+    "githubReleaseUrl": null,
+    "releasedAt": null,
+    "lastError": null,
+    "createdBy": "demo-user"
+  }
+}

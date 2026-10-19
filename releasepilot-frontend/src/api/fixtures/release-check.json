@@ -1,0 +1,12 @@
+{
+  "verdict": "UNKNOWN",
+  "mode": "demo",
+  "note": "No live readiness check was run.",
+  "trace": [],
+  "modelCalls": 0,
+  "toolRounds": 0,
+  "elapsedMs": 0,
+  "promptTokens": null,
+  "completionTokens": null,
+  "timestamp": "2026-10-17T10:15:00Z"
+}
