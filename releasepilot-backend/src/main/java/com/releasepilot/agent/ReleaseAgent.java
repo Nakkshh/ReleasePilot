@@ -4,9 +4,14 @@ import com.releasepilot.config.ReasoningStripAdvisor;
 import com.releasepilot.dto.ReleaseCheckResponse;
 import com.releasepilot.dto.ReleaseVerdict;
 import com.releasepilot.dto.TraceStep;
+import com.releasepilot.dto.github.ActionsModels;
+import com.releasepilot.dto.github.GitHubModels;
 import com.releasepilot.exception.AgentBudgetExceededException;
 import com.releasepilot.exception.GeminiServiceException;
 import com.releasepilot.knowledge.KnowledgeTools;
+import com.releasepilot.service.GitHubActionsClient;
+import com.releasepilot.service.GitHubClient;
+import com.releasepilot.service.GitHubCache;
 import com.releasepilot.tool.GitHubActionsTools;
 import com.releasepilot.tool.GitHubTools;
 import org.slf4j.Logger;
@@ -71,7 +76,15 @@ public class ReleaseAgent {
             <<<EVIDENCE
             """;
 
-    private record Evidence(String text, List<TraceStep> trace) {
+    private record StructuredEvidence(
+            ActionsModels.Run ciRun,
+            boolean ciAvailable,
+            List<GitHubModels.Issue> issues,
+            boolean issuesAvailable
+    ) {
+    }
+
+    private record Evidence(String text, List<TraceStep> trace, StructuredEvidence structured) {
     }
 
     private static final class NoToolEvidenceException extends RuntimeException {
@@ -83,6 +96,9 @@ public class ReleaseAgent {
     private final ChatClient chatClient;
     private final GitHubTools gitHubTools;
     private final GitHubActionsTools gitHubActionsTools;
+    private final GitHubActionsClient gitHubActionsClient;
+    private final GitHubClient gitHubClient;
+    private final GitHubCache gitHubCache;
     private final KnowledgeTools knowledgeTools;
     private final ObjectProvider<ReasoningStripAdvisor> reasoningStripAdvisor;
     private final int maxToolRounds;
@@ -93,6 +109,9 @@ public class ReleaseAgent {
     public ReleaseAgent(ChatClient chatClient,
                         GitHubTools gitHubTools,
                         GitHubActionsTools gitHubActionsTools,
+                        GitHubActionsClient gitHubActionsClient,
+                        GitHubClient gitHubClient,
+                        GitHubCache gitHubCache,
                         KnowledgeTools knowledgeTools,
                         ObjectProvider<ReasoningStripAdvisor> reasoningStripAdvisor,
                         @Value("${agent.max-iterations:6}") int maxToolRounds,
@@ -102,6 +121,9 @@ public class ReleaseAgent {
         this.chatClient = chatClient;
         this.gitHubTools = gitHubTools;
         this.gitHubActionsTools = gitHubActionsTools;
+        this.gitHubActionsClient = gitHubActionsClient;
+        this.gitHubClient = gitHubClient;
+        this.gitHubCache = gitHubCache;
         this.knowledgeTools = knowledgeTools;
         this.reasoningStripAdvisor = reasoningStripAdvisor;
         this.maxToolRounds = maxToolRounds;
@@ -111,17 +133,30 @@ public class ReleaseAgent {
     }
 
     public ReleaseCheckResponse check() {
+        return checkInternal(null);
+    }
+
+    public ReleaseCheckResponse check(String targetSha) {
+        if (targetSha == null || targetSha.isBlank()) {
+            throw new IllegalArgumentException("A target commit SHA is required.");
+        }
+        return checkInternal(targetSha);
+    }
+
+    private ReleaseCheckResponse checkInternal(String targetSha) {
         long t0 = System.nanoTime();
 
         if (forceFallback) {
             log.warn("[AGENT] agent.force-fallback=true, skipping the tool-calling loop");
-            return runFallback("Fallback forced by configuration (agent.force-fallback=true).")
+            return runFallback(
+                    "Fallback forced by configuration (agent.force-fallback=true).",
+                    targetSha)
                     .withElapsedMs(msSince(t0));
         }
 
         for (int attempt = 1; ; attempt++) {
             try {
-                return runOnce().withElapsedMs(msSince(t0));
+                return runOnce(targetSha).withElapsedMs(msSince(t0));
             } catch (Exception e) {
                 AgentBudgetExceededException budget = findBudgetException(e);
                 if (budget != null) {
@@ -135,8 +170,10 @@ public class ReleaseAgent {
                     }
                     log.warn("[AGENT] agent loop failed {} time(s), switching to fallback. Last cause: {}",
                             attempt, glitchDetail(e));
-                    return runFallback("Agent loop failed " + attempt
-                            + " time(s) with provider tool-call errors; verdict built from directly gathered evidence.")
+                    return runFallback(
+                            "Agent loop failed " + attempt
+                                    + " time(s) with provider tool-call errors; verdict built from directly gathered evidence.",
+                            targetSha)
                             .withElapsedMs(msSince(t0));
                 }
                 log.error("Release check failed", e);
@@ -147,14 +184,19 @@ public class ReleaseAgent {
 
     // ---------- primary path: the model chooses the tools ----------
 
-    private ReleaseCheckResponse runOnce() {
+    private ReleaseCheckResponse runOnce(String targetSha) {
         AgentRunAdvisor run = new AgentRunAdvisor(maxToolRounds, timeBudgetSeconds);
         try {
             ReasoningStripAdvisor strip = reasoningStripAdvisor.getIfAvailable();
 
             // Phase 1: the model chooses and calls the tools. Plain-text reply, no structured output.
             ChatClient.ChatClientRequestSpec gather = chatClient.prompt()
-                    .user(AGENT_GATHER_TASK)
+                    .user(targetSha == null
+                            ? AGENT_GATHER_TASK
+                            : AGENT_GATHER_TASK.replace(
+                            "Call getLatestWorkflow to get the latest CI result.",
+                            "Call getWorkflowForCommit with the exact target SHA \"" + targetSha
+                                    + "\" to get CI evidence for that commit. Do not use getLatestWorkflow."))
                     .tools(gitHubTools, gitHubActionsTools, knowledgeTools)
                     .advisors(run);
             if (strip != null) {
@@ -164,13 +206,28 @@ public class ReleaseAgent {
 
             // Must be read before the phase-2 call, which replaces the advisor's view of the conversation.
             List<AgentRunAdvisor.ToolOutput> outputs = run.toolOutputs();
-            if (outputs.stream().noneMatch(o -> "getLatestWorkflow".equals(o.name()))) {
-                throw new NoToolEvidenceException("The model did not fetch the latest CI result");
+
+            String expectedTool = targetSha == null
+                    ? "getLatestWorkflow"
+                    : "getWorkflowForCommit";
+
+            if (outputs.stream().noneMatch(o -> expectedTool.equals(o.name()))) {
+                throw new NoToolEvidenceException(
+                        "The model did not fetch CI evidence for the required commit");
             }
 
             // Phase 2: no tools attached; the same structured call the fallback makes, over what the model gathered.
             String prompt = FALLBACK_INTRO + evidenceText(outputs) + "EVIDENCE>>>\n\n" + RULES;
-            ReleaseVerdict verdict = verdictFromPrompt(prompt, run);
+
+            ReleaseVerdict modelVerdict = verdictFromPrompt(prompt, run);
+            StructuredEvidence structured = gatherStructuredEvidence(targetSha);
+            ReleaseVerdict verdict = ReleaseVerdictPolicy.enforce(
+                    modelVerdict,
+                    structured.ciRun(),
+                    structured.ciAvailable(),
+                    structured.issues(),
+                    structured.issuesAvailable(),
+                    targetSha);
 
             log.info("[AGENT] evidence chars per tool: {}", outputs.stream()
                     .map(o -> o.name() + "=" + unwrapToolText(o.text()).length()).toList());
@@ -246,20 +303,29 @@ public class ReleaseAgent {
 
     // ---------- fallback: Java gathers evidence, one model call without tools decides ----------
 
-    private ReleaseCheckResponse runFallback(String note) {
+    private ReleaseCheckResponse runFallback(String note, String targetSha) {
         long start = System.nanoTime();
-        Evidence evidence = gatherEvidence();
+        Evidence evidence = gatherEvidence(targetSha);
         String prompt = FALLBACK_INTRO + evidence.text() + "EVIDENCE>>>\n\n" + RULES;
 
         Exception last = null;
         for (int attempt = 1; attempt <= FALLBACK_VERDICT_ATTEMPTS; attempt++) {
             AgentRunAdvisor run = new AgentRunAdvisor(maxToolRounds, timeBudgetSeconds);
             try {
-                ReleaseVerdict verdict = normalize(chatClient.prompt()
+                ReleaseVerdict modelVerdict = normalize(chatClient.prompt()
                         .user(prompt)
                         .advisors(run)
                         .call()
                         .entity(ReleaseVerdict.class));
+
+                StructuredEvidence structured = evidence.structured();
+                ReleaseVerdict verdict = ReleaseVerdictPolicy.enforce(
+                        modelVerdict,
+                        structured.ciRun(),
+                        structured.ciAvailable(),
+                        structured.issues(),
+                        structured.issuesAvailable(),
+                        targetSha);
 
                 log.info("[AGENT-FALLBACK] done: status={}, {} ms", verdict.status(), msSince(start));
 
@@ -284,26 +350,89 @@ public class ReleaseAgent {
         throw new GeminiServiceException("Release check failed (fallback verdict call)", last);
     }
 
-    private Evidence gatherEvidence() {
+    private Evidence gatherEvidence(String targetSha) {
         List<TraceStep> trace = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
 
-        String latest = collect("getLatestWorkflow", () -> gitHubActionsTools.getLatestWorkflow(), trace, sb);
-        // The format() helper in GitHubActionsTools prints "status/conclusion", e.g. "completed/failure".
-        if (latest.contains("/failure")) {
-            collect("getFailedJobs", () -> gitHubActionsTools.getFailedJobs(), trace, sb);
+        String latest;
+        if (targetSha == null) {
+            latest = collect(
+                    "getLatestWorkflow",
+                    () -> gitHubActionsTools.getLatestWorkflow(),
+                    trace,
+                    sb);
+        } else {
+            latest = collect(
+                    "getWorkflowForCommit",
+                    () -> gitHubActionsTools.getWorkflowForCommit(targetSha),
+                    trace,
+                    sb);
         }
+
+        // Only inspect failed jobs for the unpinned, general-purpose readiness check.
+        // getFailedJobs() examines recent runs across commits, so it is not safe
+        // for a SHA-bound draft readiness check.
+        if (targetSha == null && latest.contains("/failure")) {
+            collect(
+                    "getFailedJobs",
+                    () -> gitHubActionsTools.getFailedJobs(),
+                    trace,
+                    sb);
+        }
+
         collect("getPullRequests", () -> gitHubTools.getPullRequests(), trace, sb);
         collect("getIssues", () -> gitHubTools.getIssues(), trace, sb);
         collect("getPullRequestReviews", () -> gitHubTools.getPullRequestReviews(), trace, sb);
         collect("releasePolicy", () -> knowledgeTools.searchReleasePolicy(
-                "release readiness rules: when to block a release, failed CI, open critical issues"), trace, sb);
+                        "release readiness rules: when to block a release, failed CI, open critical issues"),
+                trace, sb);
 
         String text = sb.toString();
         if (text.length() > MAX_EVIDENCE_CHARS) {
             text = text.substring(0, MAX_EVIDENCE_CHARS) + "\n(evidence truncated)\n";
         }
-        return new Evidence(text, trace);
+
+        return new Evidence(text, trace, gatherStructuredEvidence(targetSha));
+    }
+
+    /** Fetches policy evidence as typed API models; formatted tool strings never drive the verdict. */
+    private StructuredEvidence gatherStructuredEvidence(String targetSha) {
+        ActionsModels.Run ciRun = null;
+        boolean ciAvailable = false;
+        List<GitHubModels.Issue> issues = null;
+        boolean issuesAvailable = false;
+
+        try {
+            // A release check is a decision point, so do not let the short-lived general/SHA cache
+            // make the readiness verdict stale.
+            gitHubCache.invalidate(targetSha == null
+                    ? "runs:1"
+                    : "runs:sha:" + targetSha.toLowerCase(java.util.Locale.ROOT) + ":20");
+            List<ActionsModels.Run> runs = targetSha == null
+                    ? gitHubActionsClient.listRuns(1)
+                    : gitHubActionsClient.listRunsForSha(targetSha, 20);
+            ciAvailable = runs != null;
+            if (runs != null) {
+                ciRun = runs.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .max(java.util.Comparator.comparing(
+                                ActionsModels.Run::createdAt,
+                                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                        .orElse(null);
+            }
+        } catch (RuntimeException e) {
+            log.warn("[AGENT] structured CI evidence unavailable: {}", e.getMessage());
+        }
+
+        try {
+            gitHubCache.invalidate("openIssues");
+            issues = gitHubClient.getOpenIssues();
+            issuesAvailable = issues != null;
+        } catch (RuntimeException e) {
+            log.warn("[AGENT] structured issue evidence unavailable: {}", e.getMessage());
+        }
+
+        return new StructuredEvidence(ciRun, ciAvailable, issues, issuesAvailable);
     }
 
     /** In the fallback trace, modelMs is 0 (no model chose the call) and toolRoundMs is that call's own duration. */
@@ -342,7 +471,7 @@ public class ReleaseAgent {
         return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 
-    private static ReleaseVerdict normalize(ReleaseVerdict raw) {
+    static ReleaseVerdict normalize(ReleaseVerdict raw) {
         if (raw == null) {
             return new ReleaseVerdict("UNKNOWN", "The model returned no verdict.", List.of(), List.of());
         }

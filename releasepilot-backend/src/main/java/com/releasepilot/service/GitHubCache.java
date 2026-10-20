@@ -50,6 +50,10 @@ public class GitHubCache {
         return (T) value.orElse(null);
     }
 
+    public void invalidate(String key) {
+        cache.invalidate(key);
+    }
+
     public void invalidateAll() {
         cache.invalidateAll();
     }

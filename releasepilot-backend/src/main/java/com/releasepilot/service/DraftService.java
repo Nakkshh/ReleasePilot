@@ -92,7 +92,7 @@ public class DraftService {
         }
 
         // 3. Release readiness check.
-        ReleaseCheckResponse check = releaseAgent.check();
+        ReleaseCheckResponse check = releaseAgent.check(targetSha);
 
         // 4. Persist.
         Instant now = clock.instant();
@@ -115,6 +115,19 @@ public class DraftService {
         log.info("[DRAFT] created id={} tag={} verdict={} invalidRefs={} prs={} target={}",
                 draft.getId(), tag, draft.getVerdictStatus(), invalidRefs, notes.prCount(), targetSha);
         return view(draft);
+    }
+
+    /** Persist fresh approval-time readiness evidence while keeping the draft pending. */
+    @Transactional(noRollbackFor = DraftConflictException.class)
+    public void refreshVerdict(long id, ReleaseCheckResponse check) {
+        ReleaseDraft d = find(id);
+        expireIfNeeded(d);
+        if (d.getStatus() != DraftStatus.PENDING) {
+            throw new DraftConflictException("DRAFT_NOT_PENDING",
+                    "Draft " + id + " is " + d.getStatus() + ", not PENDING.");
+        }
+        d.refreshVerdict(json.writeValueAsString(check), normalizeVerdict(check == null ? null : check.verdict()));
+        drafts.saveAndFlush(d);
     }
 
     /** Read one draft. May persist a lazy EXPIRED transition. */

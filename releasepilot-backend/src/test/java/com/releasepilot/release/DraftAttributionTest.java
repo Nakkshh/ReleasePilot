@@ -57,7 +57,7 @@ class DraftAttributionTest {
         when(notesAgent.draft()).thenReturn(new ReleaseNotesResponse(n,
                 "last 20 merged pull requests (no previous release)", 2,
                 List.of(), List.of(), 1, 10L, 100, 50, clock.instant()));
-        when(releaseAgent.check()).thenReturn(new ReleaseCheckResponse(
+        when(releaseAgent.check(SHA)).thenReturn(new ReleaseCheckResponse(
                 new ReleaseVerdict("READY", "summary", List.of("reason"), List.of()),
                 "fallback", "test", List.of(), 1, 0, 10L, 100, 50, clock.instant()));
     }

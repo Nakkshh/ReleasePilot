@@ -112,6 +112,15 @@ public class ReleaseDraft {
         this.expiresAt = expiresAt;
     }
 
+    /** Refreshes readiness evidence without changing the pending approval state. */
+    public void refreshVerdict(String verdictJson, String verdictStatus) {
+        if (this.status != DraftStatus.PENDING) {
+            throw new IllegalStateException("Only PENDING drafts can have readiness refreshed.");
+        }
+        this.verdictJson = verdictJson;
+        this.verdictStatus = verdictStatus;
+    }
+
     /** PENDING -> APPROVED. Caller has validated the gate. */
     public void approve(String by, String comment, boolean overrideUsed, String overrideReason,
                         String newTitle, Instant now) {

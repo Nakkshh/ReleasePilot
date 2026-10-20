@@ -3,6 +3,8 @@ package com.releasepilot.service;
 import com.releasepilot.dto.ApproveRequest;
 import com.releasepilot.dto.DraftView;
 import com.releasepilot.dto.ReleaseNotesResponse;
+import com.releasepilot.dto.ReleaseCheckResponse;
+import com.releasepilot.agent.ReleaseAgent;
 import com.releasepilot.dto.github.GitHubModels;
 import com.releasepilot.exception.DraftConflictException;
 import com.releasepilot.exception.GitHubApiException;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
+import java.util.List;
 
 /**
  * Orchestrates approve and retry. NOT @Transactional: the GitHub call sits between two short
@@ -28,14 +31,16 @@ public class ReleasePublisher {
     private final DraftTransitions transitions;
     private final DraftService drafts;
     private final GitHubClient github;
+    private final ReleaseAgent releaseAgent;
     private final JsonMapper json;
     private final Clock clock;
 
     public ReleasePublisher(DraftTransitions transitions, DraftService drafts, GitHubClient github,
-                            JsonMapper json, Clock clock) {
+                            ReleaseAgent releaseAgent, JsonMapper json, Clock clock) {
         this.transitions = transitions;
         this.drafts = drafts;
         this.github = github;
+        this.releaseAgent = releaseAgent;
         this.json = json;
         this.clock = clock;
     }
@@ -48,6 +53,14 @@ public class ReleasePublisher {
                     "Tag " + current.getTag() + " already exists on GitHub. Reject this draft and create a new one.");
         }
 
+        // Revalidate only drafts that could otherwise be approved. Invalid notes and expired/non-pending
+        // drafts are rejected by the existing transition gate without spending an LLM/API round trip.
+        if (current.getStatus() == DraftStatus.PENDING
+                && clock.instant().isBefore(current.getExpiresAt())
+                && !current.isHasInvalidRefs()) {
+            revalidateBeforeApproval(current);
+        }
+
         ReleaseDraft claimed;
         try {
             claimed = transitions.claim(id, req);
@@ -57,6 +70,36 @@ public class ReleasePublisher {
                     "Another draft has already been approved for tag " + current.getTag() + ".");
         }
         return publish(claimed, false);
+    }
+
+    private void revalidateBeforeApproval(ReleaseDraft draft) {
+        String targetSha = draft.getTargetSha();
+        if (targetSha == null || targetSha.isBlank()) {
+            throw new DraftConflictException("DRAFT_SHA_MISSING",
+                    "This draft has no pinned target commit. Create a new draft before approving.");
+        }
+
+        assertHeadMatches(targetSha);
+        ReleaseCheckResponse freshCheck = releaseAgent.check(targetSha);
+        if (freshCheck == null || freshCheck.verdict() == null) {
+            throw new DraftConflictException("READINESS_REVALIDATION_FAILED",
+                    "The readiness check returned no verdict. The draft remains pending; retry approval later.");
+        }
+        assertHeadMatches(targetSha);
+        drafts.refreshVerdict(draft.getId(), freshCheck);
+        // Close the window between the potentially slow readiness check and the approval claim as much as
+        // possible. GitHub cannot be transactionally locked, so publication still uses the pinned SHA.
+        assertHeadMatches(targetSha);
+    }
+
+    private void assertHeadMatches(String targetSha) {
+        List<GitHubModels.Commit> head = github.getRecentCommits(1);
+        String currentSha = head == null || head.isEmpty() || head.get(0) == null
+                ? null : head.get(0).sha();
+        if (currentSha == null || !targetSha.equalsIgnoreCase(currentSha)) {
+            throw new DraftConflictException("DRAFT_HEAD_CHANGED",
+                    "The repository head no longer matches this draft's target commit. Create a new draft and review it again.");
+        }
     }
 
     public DraftView retry(long id) {

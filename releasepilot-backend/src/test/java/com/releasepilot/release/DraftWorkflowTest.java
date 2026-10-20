@@ -77,6 +77,10 @@ class DraftWorkflowTest {
                 .endsWith("_test");
         repo.deleteAll();
         clock.set(java.time.Instant.parse("2026-10-02T10:00:00Z"));
+        when(github.getRecentCommits(1)).thenReturn(List.of(new GitHubModels.Commit(SHA, null)));
+        when(releaseAgent.check(SHA)).thenReturn(new ReleaseCheckResponse(
+                new ReleaseVerdict("READY", "fresh readiness", List.of("fresh evidence"), List.of()),
+                "fallback", "approval-time test", List.of(), 1, 0, 10L, 100, 50, clock.instant()));
     }
 
     // ---------------------------------------------------------------- draft creation
@@ -92,6 +96,15 @@ class DraftWorkflowTest {
         assertThat(v.targetSha()).isEqualTo(SHA);
         assertThat(v.prCount()).isEqualTo(2);
         assertThat(repo.count()).isEqualTo(1);
+    }
+
+    @Test
+    void create_passesPinnedShaToReleaseCheck() {
+        stubAgents(2, List.of(), "READY");
+
+        drafts.create("v1.0.0", false);
+
+        verify(releaseAgent).check(SHA);
     }
 
     @Test
@@ -179,6 +192,9 @@ class DraftWorkflowTest {
     @Test
     void approve_notReady_followsTheOverrideRules() {
         ReleaseDraft d = saveDraft("v1.0.0", "NOT_READY", false);
+        when(releaseAgent.check(SHA)).thenReturn(new ReleaseCheckResponse(
+                new ReleaseVerdict("NOT_READY", "fresh failed CI", List.of(), List.of("failed CI")),
+                "fallback", "approval-time test", List.of(), 1, 0, 10L, 100, 50, clock.instant()));
         stubCreateOk("v1.0.0", 5L);
 
         assertConflict(() -> publisher.approve(d.getId(), approve()), "OVERRIDE_REQUIRED");
@@ -215,6 +231,57 @@ class DraftWorkflowTest {
                 new ApproveRequest("tester", null, true, "forcing it through anyway", null)), "NOTES_INVALID");
 
         verify(github, never()).createRelease(any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void approve_headChangedLeavesDraftPendingAndDoesNotPublish() {
+        ReleaseDraft d = saveDraft("v1.0.0", "READY", false);
+        when(github.getRecentCommits(1)).thenReturn(List.of(new GitHubModels.Commit("different-sha", null)));
+
+        assertConflict(() -> publisher.approve(d.getId(), approve()), "DRAFT_HEAD_CHANGED");
+
+        assertThat(repo.findById(d.getId()).orElseThrow().getStatus()).isEqualTo(DraftStatus.PENDING);
+        verify(releaseAgent, never()).check(SHA);
+        verify(github, never()).createRelease(any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void approve_refreshesVerdictAndRequiresOverrideWhenReadinessWorsens() {
+        ReleaseDraft d = saveDraft("v1.0.0", "READY", false);
+        when(releaseAgent.check(SHA)).thenReturn(new ReleaseCheckResponse(
+                new ReleaseVerdict("UNKNOWN", "CI evidence unavailable", List.of(), List.of()),
+                "fallback", "approval-time test", List.of(), 1, 0, 10L, 100, 50, clock.instant()));
+
+        assertConflict(() -> publisher.approve(d.getId(), approve()), "OVERRIDE_REQUIRED");
+
+        ReleaseDraft refreshed = repo.findById(d.getId()).orElseThrow();
+        assertThat(refreshed.getStatus()).isEqualTo(DraftStatus.PENDING);
+        assertThat(refreshed.getVerdictStatus()).isEqualTo("UNKNOWN");
+        verify(github, never()).createRelease(any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void approve_headChangingDuringRevalidationIsRejected() {
+        ReleaseDraft d = saveDraft("v1.0.0", "READY", false);
+        when(github.getRecentCommits(1)).thenReturn(
+                List.of(new GitHubModels.Commit(SHA, null)),
+                List.of(new GitHubModels.Commit(SHA, null)),
+                List.of(new GitHubModels.Commit("different-sha", null)));
+
+        assertConflict(() -> publisher.approve(d.getId(), approve()), "DRAFT_HEAD_CHANGED");
+
+        assertThat(repo.findById(d.getId()).orElseThrow().getStatus()).isEqualTo(DraftStatus.PENDING);
+        verify(github, never()).createRelease(any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void approve_rechecksReadinessForPinnedShaBeforePublishing() {
+        ReleaseDraft d = saveDraft("v1.0.0", "READY", false);
+        stubCreateOk("v1.0.0", 5L);
+
+        publisher.approve(d.getId(), approve());
+
+        verify(releaseAgent).check(SHA);
     }
 
     @Test
@@ -422,7 +489,7 @@ class DraftWorkflowTest {
     private void stubAgents(int prCount, List<Integer> invalid, String verdict) {
         when(github.getRecentCommits(1)).thenReturn(List.of(new GitHubModels.Commit(SHA, null)));
         when(notesAgent.draft()).thenReturn(notesResponse(prCount, invalid));
-        when(releaseAgent.check()).thenReturn(checkResponse(verdict));
+        when(releaseAgent.check(SHA)).thenReturn(checkResponse(verdict));
     }
 
     private ReleaseNotesResponse notesResponse(int prCount, List<Integer> invalid) {

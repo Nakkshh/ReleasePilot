@@ -47,6 +47,31 @@ public class GitHubActionsTools {
         }
     }
 
+    @Tool
+    public String getWorkflowForCommit(String sha) {
+        if (sha == null || sha.isBlank()) {
+            return "ERROR: A target commit SHA is required.";
+        }
+
+        List<ActionsModels.Run> runs = github.listRunsForSha(sha, 20);
+
+        if (runs.isEmpty()) {
+            return "UNKNOWN: No GitHub Actions workflow run found for target SHA " + sha;
+        }
+
+        ActionsModels.Run latest = runs.stream()
+                .max(java.util.Comparator.comparing(
+                        ActionsModels.Run::createdAt,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .orElse(null);
+
+        if (latest == null) {
+            return "UNKNOWN: No GitHub Actions workflow run found for target SHA " + sha;
+        }
+
+        return format(latest);
+    }
+
     @Tool(description = "Get the status of the 5 most recent GitHub Actions workflow runs (CI/CD builds), "
             + "newest first. Useful to see whether builds are passing or failing over time. Takes no arguments.")
     public String getWorkflowStatus() {

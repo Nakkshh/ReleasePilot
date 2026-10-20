@@ -18,6 +18,8 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 @Service
 public class GitHubActionsClient {
@@ -61,6 +63,34 @@ public class GitHubActionsClient {
                     .onStatus(HttpStatusCode::isError, this::fail)
                     .body(ActionsModels.RunsResponse.class);
             return (resp == null || resp.runs() == null) ? List.<ActionsModels.Run>of() : resp.runs();
+        });
+    }
+
+    public List<ActionsModels.Run> listRunsForSha(String sha, int count) {
+        if (sha == null || sha.isBlank() || count < 1) {
+            return List.of();
+        }
+
+        String cacheKey = "runs:sha:" + sha.toLowerCase(Locale.ROOT) + ":" + count;
+
+        return cache.get(cacheKey, () -> {
+            ActionsModels.RunsResponse resp = api.get()
+                    .uri("/repos/{o}/{r}/actions/runs?head_sha={sha}&per_page={n}",
+                            owner, repo, sha, count)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, this::fail)
+                    .body(ActionsModels.RunsResponse.class);
+
+            if (resp == null || resp.runs() == null) {
+                return List.of();
+            }
+
+            // Verify the actual head_sha field even though GitHub filters the API request.
+            return resp.runs().stream()
+                    .filter(Objects::nonNull)
+                    .filter(run -> run.headSha() != null
+                            && sha.equalsIgnoreCase(run.headSha()))
+                    .toList();
         });
     }
 
