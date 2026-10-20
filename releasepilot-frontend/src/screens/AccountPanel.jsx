@@ -20,25 +20,53 @@ export default function AccountPanel({ api, mode, notify }) {
   const [message, setMessage] = useState('')
   const [expiresAt, setExpiresAt] = useState(getTokenExpiresAt())
 
-  async function loadAccount() {
-    if (mode !== 'live' || !getAccessToken()) {
-      setAccount(null)
-      setExpiresAt(null)
-      return
-    }
-
-    try {
-      const result = await api.me()
-      setAccount(result)
-      setExpiresAt(getTokenExpiresAt())
-    } catch (requestError) {
-      setAccount(null)
-      setError(describeApiError(requestError))
-    }
-  }
+//   async function loadAccount() {
+//     if (mode !== 'live' || !getAccessToken()) {
+//       setAccount(null)
+//       setExpiresAt(null)
+//       return
+//     }
+//
+//     try {
+//       const result = await api.me()
+//       setAccount(result)
+//       setExpiresAt(getTokenExpiresAt())
+//     } catch (requestError) {
+//       setAccount(null)
+//       setError(describeApiError(requestError))
+//     }
+//   }
 
   useEffect(() => {
-    loadAccount()
+    let cancelled = false
+
+    Promise.resolve().then(async () => {
+      if (mode !== 'live' || !getAccessToken()) {
+        if (!cancelled) {
+          setAccount(null)
+          setExpiresAt(null)
+        }
+        return
+      }
+
+      try {
+        const result = await api.me()
+
+        if (!cancelled) {
+          setAccount(result)
+          setExpiresAt(getTokenExpiresAt())
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setAccount(null)
+          setError(describeApiError(requestError))
+        }
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [api, mode])
 
   useEffect(() => {

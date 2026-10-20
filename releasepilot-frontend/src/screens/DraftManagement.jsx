@@ -28,7 +28,6 @@ export default function DraftManagement({
   mode,
   drafts = [],
   onChanged,
-  notify,
 }) {
   const [username, setUsername] = useState('')
   const [roles, setRoles] = useState([])

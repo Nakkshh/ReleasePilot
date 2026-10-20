@@ -159,7 +159,17 @@ export default function DraftDetail({ draftId, api, onBack }) {
   }, [api, draftId])
 
   useEffect(() => {
-    loadDraft()
+    let cancelled = false
+
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        loadDraft()
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [loadDraft])
 
   const verdict = draft?.verdict
